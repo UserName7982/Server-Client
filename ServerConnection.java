@@ -3,9 +3,9 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.security.PrivateKey;
 import java.util.Scanner;
 import javax.crypto.SecretKey;
-
 
 
 public class ServerConnection {
@@ -17,7 +17,7 @@ public class ServerConnection {
     private SecretKey secretKey;
     private volatile boolean isRunning = true; // Flag to coordinate thread termination
 
-    public ServerConnection(Socket socket, SecretKey secretKey) {
+    public ServerConnection(Socket socket, SecretKey secretKey, String encryptSecretKey, PrivateKey privateKey) {
         this.socket = socket;
         this.secretKey = secretKey;
         try {

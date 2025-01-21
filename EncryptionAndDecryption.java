@@ -1,13 +1,13 @@
 
 import java.io.*;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.Base64;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
-
-
 
 public class EncryptionAndDecryption {
 
@@ -41,6 +41,19 @@ public class EncryptionAndDecryption {
         String encryptedBase64 = Base64.getEncoder().encodeToString(encryptedBytes);
 
         return ivBase64 + ":" + encryptedBase64;
+    }
+
+    public byte[] encryptSecretKey(SecretKey secretKey, PublicKey publicKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("RES");
+        cipher.init(cipher.ENCRYPT_MODE, publicKey);
+        return cipher.doFinal(secretKey.getEncoded());
+    }
+
+    public SecretKey DecryptSecretkey(byte[] encryptkey, PrivateKey privateKey) throws Exception {
+        Cipher sCipher = Cipher.getInstance("RES");
+        sCipher.init(sCipher.DECRYPT_MODE, privateKey);
+        byte[] doFinal = sCipher.doFinal(encryptkey);
+        return new javax.crypto.spec.SecretKeySpec(doFinal,"AES");
     }
 
     // Decrypt a String to a Message object
