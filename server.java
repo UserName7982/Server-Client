@@ -3,6 +3,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.NoSuchAlgorithmException;
@@ -17,6 +18,7 @@ public class server {
     private SecretKey secretKey;
     private EncryptionAndDecryption encryptionAndDecryption;
     private String encryptSecretKey;
+
     public server() throws IOException, NoSuchAlgorithmException {
         serverSocket = new ServerSocket(PORT);
         System.out.println("Waiting for clients to connect...");
@@ -39,16 +41,16 @@ public class server {
             // Handle each client in a new thread
             new Thread(() -> {
                 try {
-                   ObjectInputStream br=new ObjectInputStream((socket.getInputStream()));
-                    
-                    PublicKey ClientpublicKey=(PublicKey)br.readObject();
+                    ObjectInputStream br = new ObjectInputStream((socket.getInputStream()));
+                    PublicKey ClientpublicKey = (PublicKey) br.readObject();
                     encryptSecretKey = encryptionAndDecryption.encryptSecretKey(secretKey, ClientpublicKey);
+                    ObjectOutputStream ois = new ObjectOutputStream(socket.getOutputStream());
+                    ois.writeObject(ClientpublicKey);
                 } catch (Exception e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
-                ServerConnection serverConnection = new ServerConnection(socket, secretKey, encryptSecretKey,
-                        privateKey);
+                ServerConnection serverConnection = new ServerConnection(socket, secretKey);
+                System.out.println("EncryptionSecretKey Done:");
                 serverConnection.start();
             }).start();
         }

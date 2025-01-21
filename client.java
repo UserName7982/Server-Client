@@ -4,6 +4,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.Scanner;
 import javax.crypto.SecretKey;
 
@@ -13,7 +15,9 @@ public class client {
     Message messages;
     private EncryptionAndDecryption encryptionAndDecryption;
     private SecretKey secretKey;
-
+    private RSAKeyPairGenerator rsaKeyPairGenerator;
+    private PublicKey publicKey;
+    private PrivateKey privateKey;
     public void startClient() {
         try (Socket socket = new Socket(SERVER_ADDRESS, PORT);
                 ObjectInputStream serverInput = new ObjectInputStream(socket.getInputStream());
@@ -21,12 +25,26 @@ public class client {
                 Scanner scanner = new Scanner(System.in)) {
 
             System.out.println("Connected to the server.");
-            System.out.println("Genrating SecretKey");
-            encryptionAndDecryption=new EncryptionAndDecryption();
             try {
-                secretKey=encryptionAndDecryption.Generatedkey();
-                System.out.println(secretKey);
+                rsaKeyPairGenerator = new RSAKeyPairGenerator();
             } catch (NoSuchAlgorithmException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            publicKey=rsaKeyPairGenerator.getPublicKey();
+            serverOutput.writeObject(publicKey);
+            privateKey=rsaKeyPairGenerator.getPrivateKey();
+            encryptionAndDecryption = new EncryptionAndDecryption();
+            try {
+               String EncryptedString=(String)serverInput.readObject();
+               try {
+                secretKey = encryptionAndDecryption.DecryptSecretkey(EncryptedString, privateKey);
+            } catch (Exception e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            } catch (ClassNotFoundException e) {
+                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
             Thread readerThread = new Thread(() -> {
@@ -86,7 +104,7 @@ public class client {
                         break;
                     }
                 }
-            });
+            }).start();
 
         } catch (IOException e) {
             System.err.println("Error connecting to server: " + e.getMessage());
