@@ -42,6 +42,7 @@ public class EncryptionAndDecryption {
         return ivBase64 + ":" + encryptedBase64;
     }
 
+    @SuppressWarnings("static-access")
     public String encryptSecretKey(SecretKey secretKey, PublicKey publicKey) throws Exception {
         Cipher cipher = Cipher.getInstance("RSA");
         cipher.init(cipher.ENCRYPT_MODE, publicKey);
@@ -49,6 +50,7 @@ public class EncryptionAndDecryption {
         return Base64.getEncoder().encodeToString(doFinal);
     }
 
+    @SuppressWarnings("static-access")
     public SecretKey DecryptSecretkey(String encryptedString, PrivateKey privateKey) throws Exception {
         byte[] Byte=Base64.getDecoder().decode(encryptedString);
         Cipher sCipher = Cipher.getInstance("RSA");
