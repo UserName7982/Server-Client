@@ -3,11 +3,11 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Scanner;
+
 import javax.crypto.SecretKey;
 
 public class ServerConnection {
     private Socket socket;
-
     private ObjectOutputStream pr;
     private ObjectInputStream br;
     private Message messages;
@@ -15,6 +15,7 @@ public class ServerConnection {
     private SecretKey secretKey;
     private volatile boolean isRunning = true;
     private boolean isInitialized = false;
+    private Scanner scanner;
 
     public ServerConnection(Socket socket, SecretKey secretKey) {
         this.socket = socket;
@@ -22,10 +23,12 @@ public class ServerConnection {
         try {
             System.out.println("Initializing ServerConnection...");
             if (socket == null || socket.isClosed()) {
+                System.out.println("First time hi fail...");
                 throw new IllegalStateException("Socket is null or closed.");
             }
-            pr = new ObjectOutputStream(socket.getOutputStream());
-            br = new ObjectInputStream(socket.getInputStream());
+            this.pr = new ObjectOutputStream(socket.getOutputStream());
+            this.br = new ObjectInputStream(socket.getInputStream());
+            this.scanner=new Scanner(System.in);
             encryptionAndDecryption = new EncryptionAndDecryption();
             System.out.println("SecretKey generated: " + secretKey);
             isInitialized = true;
@@ -42,49 +45,54 @@ public class ServerConnection {
         }
 
         // Reader Thread
-        new Thread(() -> {
-            try {
-                // br=new ObjectInputStream(socket.getInputStream());
-                System.out.println(br);
-                while (isRunning) {
+        Thread readerThread = new Thread(() -> {
+            while (isRunning) {
+                if (!socket.isClosed()) {
                     try {
-                            String encryptedMessage = (String) br.readObject();
+                        System.out.println("Hello from Reader Thread"+Thread.currentThread().getName());
+                        Object obj = br.readObject();
+                        if (obj != null) {
+                            String encryptedMessage = (String) obj;
                             System.out.println(encryptedMessage);
                             try {
                                 messages = (Message) encryptionAndDecryption.Decrypt(encryptedMessage, secretKey);
-                            } catch (Exception e) {
-                                // TODO Auto-generated catch block
-                                e.printStackTrace();
-                            }
-                            String input = messages.getMessage();
+                                String input = messages.getMessage();
 
-                            if (input != null) {
-                                System.out.println("Client: " + input);
-                                if (input.equalsIgnoreCase("exit")) {
-                                    System.out.println("Client closed the connection.");
-                                    br.close();
-                                    stopConnection();
-                                    break;
+                                if (input != null) {
+                                    System.out.println("Client: " + input);
+                                    if (input.equalsIgnoreCase("exit")) {
+                                        System.out.println("Client closed the connection.");
+
+                                        stopConnection(); // Close socket and exit
+                                        break;
+                                    }
                                 }
+                            } catch (Exception e) {
+                                System.err.println("Error decrypting message: " + e.getMessage());
+                                stopConnection(); // Exit on decryption failure
+                                break;
                             }
-                        
-
+                        }
+                    } catch (IOException e) {
+                        if (isRunning && socket.isClosed()) {
+                            System.err.println("Error reading from client: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                        break;
                     } catch (ClassNotFoundException e) {
                         System.err.println("Error deserializing message: " + e.getMessage());
                     }
+                }else{
+                    System.out.println("Socket is get closed by Clients side");
+                    break;
                 }
-            } catch (IOException e) {
-                if (isRunning) {
-                    System.err.println("Error reading from client: " + e.getMessage());
-                }
-            }finally{
-                stopConnection();
+
             }
-        }).start();
+        });
 
         // Writer Thread
-        new Thread(() -> {
-            try (Scanner scanner = new Scanner(System.in)) {
+        Thread writerThread = new Thread(() -> {
+            
                 while (isRunning) {
                     String message = scanner.nextLine();
                     messages = new Message(message, socket.getLocalAddress().toString(),
@@ -92,6 +100,7 @@ public class ServerConnection {
 
                     try {
                         String encryptedMessage = encryptionAndDecryption.encrypt(messages, secretKey);
+                        System.out.println("Sending: " + encryptedMessage);
                         pr.writeObject(encryptedMessage);
                         pr.flush();
                     } catch (Exception e) {
@@ -100,22 +109,37 @@ public class ServerConnection {
 
                     if (message.equalsIgnoreCase("exit")) {
                         System.out.println("Closing connection...");
-                        stopConnection();
+                        stopConnection(); // Close socket and exit
                         break;
                     }
                 }
-            }
-        }).start();
+            
+        });
+
+        // Start Threads
+        readerThread.start();
+        writerThread.start();
+        try {
+            readerThread.join();
+            writerThread.join();
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 
     private void stopConnection() {
         isRunning = false;
         try {
+            if (pr != null)
+                pr.close();
+            if (br != null)
+                br.close();
             if (socket != null && !socket.isClosed()) {
                 socket.close();
             }
         } catch (IOException e) {
-            System.err.println("Error closing socket: " + e.getMessage());
+            System.err.println("Error closing resources: " + e.getMessage());
         }
     }
 }

@@ -18,16 +18,18 @@ public class client {
     }
 
     public void startClient() {
-        try  {
-
+        try {
+            encryptionAndDecryption=new EncryptionAndDecryption();
             System.out.println("Running Client");
 
             // Reading thread
             Thread readerThread = new Thread(() -> {
                 try (ObjectInputStream serverInput = new ObjectInputStream(socket.getInputStream())) {
+                    System.out.println("Reading from server..."+serverInput);
                     while (isRunning && !socket.isClosed()) {
                         try {
                             String encryptedMessage = (String) serverInput.readObject(); // Read encrypted string
+                            System.out.println(encryptedMessage);
                             try {
                                 messages = (Message) encryptionAndDecryption.Decrypt(encryptedMessage, secretKey);
                             } catch (Exception e) {
@@ -45,6 +47,7 @@ public class client {
                         } catch (ClassNotFoundException | IOException e) {
                             if (!socket.isClosed()) {
                                 System.err.println("Error reading from server: " + e.getMessage());
+                                e.printStackTrace();
                             }
                             break;
                         }
@@ -55,11 +58,13 @@ public class client {
             });
             readerThread.start();
 
+
             // Writing thread
             Thread writerThread = new Thread(() -> {
-                while (isRunning && !socket.isClosed()) {
-                    try(ObjectOutputStream serverOutput = new ObjectOutputStream(socket.getOutputStream());
-                    Scanner scanner = new Scanner(System.in)) {
+                try (ObjectOutputStream serverOutput = new ObjectOutputStream(socket.getOutputStream());
+                        Scanner scanner = new Scanner(System.in)) {
+
+                    while (isRunning && !socket.isClosed()) {
                         if (scanner.hasNextLine()) {
                             String message = scanner.nextLine();
                             messages = new Message(message, socket.getLocalAddress().toString(),
@@ -78,16 +83,12 @@ public class client {
                             if ("exit".equalsIgnoreCase(message)) {
                                 System.out.println("Disconnecting...");
                                 isRunning = false; // Signal other threads to stop
-                                socket.close(); // Close the socket
                                 break;
                             }
                         }
-                    } catch (IOException e) {
-                        if (!socket.isClosed()) {
-                            System.err.println("Error writing to server: " + e.getMessage());
-                        }
-                        break;
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             });
             writerThread.start();
@@ -95,12 +96,12 @@ public class client {
             // Wait for threads to finish
             readerThread.join();
             writerThread.join();
-
-        } catch ( InterruptedException e) {
+        } catch (Exception e) {
             System.err.println("Error connecting to server: " + e.getMessage());
         } finally {
             try {
                 if (!socket.isClosed()) {
+                    System.out.println("Clients disconnected... Clients closes Socket");
                     socket.close(); // Ensure the socket is closed
                 }
             } catch (IOException e) {

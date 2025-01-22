@@ -33,8 +33,9 @@ public class server {
 
     private void handleClient(Socket socket) {
         try (
-            ObjectInputStream br = new ObjectInputStream(socket.getInputStream());
-            ObjectOutputStream ois = new ObjectOutputStream(socket.getOutputStream())
+            ObjectOutputStream ois = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream br = new ObjectInputStream(socket.getInputStream())
+            
         ) {
             System.out.println("Thread: " + Thread.currentThread().getName());
 
