@@ -1,117 +1,111 @@
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.util.Scanner;
 import javax.crypto.SecretKey;
 
 public class client {
-    private static final String SERVER_ADDRESS = "127.0.0.1";
-    private static final int PORT = 8082;
-    Message messages;
+    private Message messages;
     private EncryptionAndDecryption encryptionAndDecryption;
     private SecretKey secretKey;
-    private RSAKeyPairGenerator rsaKeyPairGenerator;
-    private PublicKey publicKey;
-    private PrivateKey privateKey;
-    public void startClient() {
-        try (Socket socket = new Socket(SERVER_ADDRESS, PORT);
-                ObjectInputStream serverInput = new ObjectInputStream(socket.getInputStream());
-                ObjectOutputStream serverOutput = new ObjectOutputStream(socket.getOutputStream());
-                Scanner scanner = new Scanner(System.in)) {
+    private Socket socket;
+    private volatile boolean isRunning = true; // Shared flag for thread termination
 
-            System.out.println("Connected to the server.");
-            try {
-                rsaKeyPairGenerator = new RSAKeyPairGenerator();
-            } catch (NoSuchAlgorithmException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-            publicKey=rsaKeyPairGenerator.getPublicKey();
-            serverOutput.writeObject(publicKey);
-            privateKey=rsaKeyPairGenerator.getPrivateKey();
-            encryptionAndDecryption = new EncryptionAndDecryption();
-            try {
-               String EncryptedString=(String)serverInput.readObject();
-               try {
-                secretKey = encryptionAndDecryption.DecryptSecretkey(EncryptedString, privateKey);
-            } catch (Exception e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-            } catch (ClassNotFoundException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
+    public client(SecretKey secretKey, Socket socket) {
+        this.secretKey = secretKey;
+        this.socket = socket;
+    }
+
+    public void startClient() {
+        try  {
+
+            System.out.println("Running Client");
+
+            // Reading thread
             Thread readerThread = new Thread(() -> {
-                try {
-                    try {
-                        String input;
-                        while (true) {
-                            String string = (String) serverInput.readObject();
+                try (ObjectInputStream serverInput = new ObjectInputStream(socket.getInputStream())) {
+                    while (isRunning && !socket.isClosed()) {
+                        try {
+                            String encryptedMessage = (String) serverInput.readObject(); // Read encrypted string
                             try {
-                                messages = (Message) encryptionAndDecryption.Decrypt(string, secretKey);
+                                messages = (Message) encryptionAndDecryption.Decrypt(encryptedMessage, secretKey);
                             } catch (Exception e) {
+                                // TODO Auto-generated catch block
                                 e.printStackTrace();
                             }
+                            String receivedMessage = messages.getMessage();
+                            System.out.println("Server: " + receivedMessage);
 
-                            if ((input = messages.getMessage()) != null) {
-                                System.out.println("Server: " + input);
-                                if (input.equals("exit")) {
-                                    socket.close();
-                                    break;
-                                }
+                            if ("exit".equalsIgnoreCase(receivedMessage)) {
+                                System.out.println("Server disconnected.");
+                                isRunning = false; // Signal other threads to stop
+                                break;
                             }
+                        } catch (ClassNotFoundException | IOException e) {
+                            if (!socket.isClosed()) {
+                                System.err.println("Error reading from server: " + e.getMessage());
+                            }
+                            break;
                         }
-
-                    } catch (ClassNotFoundException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
                     }
                 } catch (IOException e) {
-                    System.err.println("Error reading from server: " + e.getMessage());
+                    System.err.println("Error initializing input stream: " + e.getMessage());
                 }
             });
             readerThread.start();
-            new Thread(() -> {
-                while (true) {
-                    String message = scanner.nextLine();
-                    messages = new Message(message, socket.getLocalAddress().toString(),
-                            socket.getInetAddress().toString());
-                    messages.setMessage(message);
-                    messages.setSender(socket.getLocalAddress().toString());
-                    messages.setRecipent(socket.getInetAddress().toString());
-                    try {
-                        String string = encryptionAndDecryption.encrypt(messages, secretKey);
-                        serverOutput.writeObject(string);
-                    } catch (Exception e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                    }
 
-                    if ("exit".equalsIgnoreCase(message)) {
-                        System.out.println("Disconnected from server.");
-                        try {
-                            socket.close();
-                        } catch (IOException e) {
-                            // TODO Auto-generated catch block
-                            e.printStackTrace();
+            // Writing thread
+            Thread writerThread = new Thread(() -> {
+                while (isRunning && !socket.isClosed()) {
+                    try(ObjectOutputStream serverOutput = new ObjectOutputStream(socket.getOutputStream());
+                    Scanner scanner = new Scanner(System.in)) {
+                        if (scanner.hasNextLine()) {
+                            String message = scanner.nextLine();
+                            messages = new Message(message, socket.getLocalAddress().toString(),
+                                    socket.getInetAddress().toString());
+                            String encryptedMessage;
+                            try {
+                                encryptedMessage = encryptionAndDecryption.encrypt(messages, secretKey);
+                                serverOutput.writeObject(encryptedMessage);
+                                serverOutput.flush();
+
+                            } catch (Exception e) {
+                                // TODO Auto-generated catch block
+                                e.printStackTrace();
+                            }
+
+                            if ("exit".equalsIgnoreCase(message)) {
+                                System.out.println("Disconnecting...");
+                                isRunning = false; // Signal other threads to stop
+                                socket.close(); // Close the socket
+                                break;
+                            }
+                        }
+                    } catch (IOException e) {
+                        if (!socket.isClosed()) {
+                            System.err.println("Error writing to server: " + e.getMessage());
                         }
                         break;
                     }
                 }
-            }).start();
+            });
+            writerThread.start();
 
-        } catch (IOException e) {
+            // Wait for threads to finish
+            readerThread.join();
+            writerThread.join();
+
+        } catch ( InterruptedException e) {
             System.err.println("Error connecting to server: " + e.getMessage());
+        } finally {
+            try {
+                if (!socket.isClosed()) {
+                    socket.close(); // Ensure the socket is closed
+                }
+            } catch (IOException e) {
+                System.err.println("Error closing socket: " + e.getMessage());
+            }
         }
-    }
-
-    public static void main(String[] args) {
-        new client().startClient();
     }
 }
