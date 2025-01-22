@@ -49,11 +49,10 @@ public class ServerConnection {
             while (isRunning) {
                 if (!socket.isClosed()) {
                     try {
-                        System.out.println("Hello from Reader Thread"+Thread.currentThread().getName());
+                    
                         Object obj = br.readObject();
                         if (obj != null) {
                             String encryptedMessage = (String) obj;
-                            System.out.println(encryptedMessage);
                             try {
                                 messages = (Message) encryptionAndDecryption.Decrypt(encryptedMessage, secretKey);
                                 String input = messages.getMessage();
@@ -62,14 +61,13 @@ public class ServerConnection {
                                     System.out.println("Client: " + input);
                                     if (input.equalsIgnoreCase("exit")) {
                                         System.out.println("Client closed the connection.");
-
-                                        stopConnection(); // Close socket and exit
+                                        stopConnection(); 
                                         break;
                                     }
                                 }
                             } catch (Exception e) {
                                 System.err.println("Error decrypting message: " + e.getMessage());
-                                stopConnection(); // Exit on decryption failure
+                                stopConnection(); 
                                 break;
                             }
                         }
@@ -100,7 +98,6 @@ public class ServerConnection {
 
                     try {
                         String encryptedMessage = encryptionAndDecryption.encrypt(messages, secretKey);
-                        System.out.println("Sending: " + encryptedMessage);
                         pr.writeObject(encryptedMessage);
                         pr.flush();
                     } catch (Exception e) {

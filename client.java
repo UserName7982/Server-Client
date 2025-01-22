@@ -29,7 +29,6 @@ public class client {
                     while (isRunning && !socket.isClosed()) {
                         try {
                             String encryptedMessage = (String) serverInput.readObject(); // Read encrypted string
-                            System.out.println(encryptedMessage);
                             try {
                                 messages = (Message) encryptionAndDecryption.Decrypt(encryptedMessage, secretKey);
                             } catch (Exception e) {
